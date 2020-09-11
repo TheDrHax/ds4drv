@@ -177,18 +177,18 @@ class UDPServer:
             report.trackpad_touch0_active * 0xFF,
             report.trackpad_touch0_id,
 
-            report.trackpad_touch0_x >> 8,
             report.trackpad_touch0_x & 255,
-            report.trackpad_touch0_y >> 8,
+            report.trackpad_touch0_x >> 8,
             report.trackpad_touch0_y & 255,
+            report.trackpad_touch0_y >> 8,
 
             report.trackpad_touch1_active * 0xFF,
             report.trackpad_touch1_id,
 
-            report.trackpad_touch1_x >> 8,
             report.trackpad_touch1_x & 255,
-            report.trackpad_touch1_y >> 8,
+            report.trackpad_touch1_x >> 8,
             report.trackpad_touch1_y & 255,
+            report.trackpad_touch1_y >> 8,
         ])
 
         data.extend(bytes(struct.pack('<Q', int(time() * 10**6))))
