@@ -48,7 +48,7 @@ How to use
 The driver supports all versions of Sony DualShock 4 controllers (I use
 DS4v2) connected via USB or Bluetooth.
 
-My version of ds4drv has 4 additional command line arguments (all are
+My version of ds4drv has 5 additional command line arguments (all are
 optional):
 
 -  ``--udp`` -- starts UDP server. Without this flag ds4drv acts just
@@ -57,6 +57,7 @@ optional):
    (default: 127.0.0.1);
 -  ``--udp-port`` -- UDP port on which server will be listening
    (default: 26760);
+-  ``--udp-no-touch`` -- do not send touchpad touches to UDP clients;
 -  ``--udp-remap-buttons`` -- an option for those, who doesn’t like
    Nintendo’s button layout. It just swaps A↔B and X↔Y buttons only for
    UDP clients.

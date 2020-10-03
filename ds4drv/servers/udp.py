@@ -44,6 +44,7 @@ class UDPServer:
         self.counter = 0
         self.clients = dict()
         self.remap = False
+        self.send_touch = True
 
     def _res_ports(self, index):
         return Message('ports', [
@@ -173,23 +174,31 @@ class UDPServer:
 
             report.r2_analog,
             report.l2_analog,
-
-            report.trackpad_touch0_active * 0xFF,
-            report.trackpad_touch0_id,
-
-            report.trackpad_touch0_x & 255,
-            report.trackpad_touch0_x >> 8,
-            report.trackpad_touch0_y & 255,
-            report.trackpad_touch0_y >> 8,
-
-            report.trackpad_touch1_active * 0xFF,
-            report.trackpad_touch1_id,
-
-            report.trackpad_touch1_x & 255,
-            report.trackpad_touch1_x >> 8,
-            report.trackpad_touch1_y & 255,
-            report.trackpad_touch1_y >> 8,
         ])
+
+        if self.send_touch:
+            data.extend([
+                report.trackpad_touch0_active * 0xFF,
+                report.trackpad_touch0_id,
+
+                report.trackpad_touch0_x & 255,
+                report.trackpad_touch0_x >> 8,
+                report.trackpad_touch0_y & 255,
+                report.trackpad_touch0_y >> 8,
+
+                report.trackpad_touch1_active * 0xFF,
+                report.trackpad_touch1_id,
+
+                report.trackpad_touch1_x & 255,
+                report.trackpad_touch1_x >> 8,
+                report.trackpad_touch1_y & 255,
+                report.trackpad_touch1_y >> 8,
+            ])
+        else:
+            data.extend([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+            ])
 
         data.extend(bytes(struct.pack('<Q', int(time() * 10**6))))
 
