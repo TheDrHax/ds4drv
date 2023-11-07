@@ -1,9 +1,9 @@
 import sys
 
-from .device import DS4Report
+from .device import DSReport
 
 
-VALID_BUTTONS = DS4Report.__slots__
+VALID_BUTTONS = DSReport.__slots__
 
 
 def iter_except(func, exception, first=None):

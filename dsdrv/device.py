@@ -1,9 +1,12 @@
-from struct import Struct
+import math
+from zlib import crc32
+from struct import Struct, pack
 from sys import version_info as sys_version
-
+from .controllers import controllers, controller
 
 class StructHack(Struct):
     """Python <2.7.4 doesn't support struct unpack from bytearray."""
+
     def unpack_from(self, buf, offset=0):
         buf = buffer(buf)
 
@@ -16,7 +19,7 @@ else:
     S16LE = Struct("<h")
 
 
-class DS4Report(object):
+class DSReport(object):
     __slots__ = ["left_analog_x",
                  "left_analog_y",
                  "right_analog_x",
@@ -65,17 +68,26 @@ class DS4Report(object):
         for i, value in enumerate(args):
             setattr(self, self.__slots__[i], value)
 
+def hashcrc32(report_id, pkt: bytearray):
+    """Add a crc32 hash to the given report
+    """
+    crcpos = len(pkt)-4
+    hash = (crc32(bytearray([report_id]) + pkt) % (1<<32)).to_bytes(4, "big")
+    for i in range(4):
+        pkt[crcpos+i] = hash[i]
 
-class DS4Device(object):
-    """A DS4 controller object.
+
+class DSDevice(object):
+    """A DS controller object.
 
     Used to control the device functions and reading HID reports.
     """
 
-    def __init__(self, device_name, device_addr, type):
+    def __init__(self, device_name, device_addr, type, controller):
         self.device_name = device_name
         self.device_addr = device_addr
         self.type = type
+        self.controller = controller
 
         self._led = (0, 0, 0)
         self._led_flash = (0, 0)
@@ -118,15 +130,15 @@ class DS4Device(object):
                 led_red=0, led_green=0, led_blue=0,
                 flash_led1=0, flash_led2=0):
         if self.type == "bluetooth":
-            pkt = bytearray(77)
-            pkt[0] = 128
+            pkt = bytearray(self.controller.value.output_report_size[1])
+            pkt[0] = self.controller.value.output_report_id[1]
             pkt[2] = 255
-            offset = 2
+            offset = self.controller.value.bluetoothOffset_out
             report_id = 0x11
 
         elif self.type == "usb":
-            pkt = bytearray(31)
-            pkt[0] = 255
+            pkt = bytearray(self.controller.value.output_report_size[0])
+            pkt[0] = self.controller.value.output_report_id[0]
             offset = 0
             report_id = 0x05
 
@@ -135,9 +147,9 @@ class DS4Device(object):
         pkt[offset+4] = min(big_rumble, 255)
 
         # LED (red, green, blue)
-        pkt[offset+5] = min(led_red, 255)
-        pkt[offset+6] = min(led_green, 255)
-        pkt[offset+7] = min(led_blue, 255)
+        pkt[offset+self.controller.value.led_bit] = min(led_red, 255)
+        pkt[offset+self.controller.value.led_bit+1] = min(led_green, 255)
+        pkt[offset+self.controller.value.led_bit+2] = min(led_blue, 255)
 
         # Time to flash bright (255 = 2.5 seconds)
         pkt[offset+8] = min(flash_led1, 255)
@@ -145,69 +157,86 @@ class DS4Device(object):
         # Time to flash dark (255 = 2.5 seconds)
         pkt[offset+9] = min(flash_led2, 255)
 
+        if (self.controller == controllers.DualSense):
+            hashcrc32(report_id ,pkt)
+
         self.write_report(report_id, pkt)
 
     def parse_report(self, buf):
         """Parse a buffer containing a HID report."""
-        dpad = buf[5] % 16
 
-        return DS4Report(
+        dpad = buf[self.controller.value.dpadByte] % 16
+
+        return DSReport(
             # Left analog stick
-            buf[1], buf[2],
+            buf[self.controller.value.lstick_start], buf[self.controller.value.lstick_start+1],
 
             # Right analog stick
-            buf[3], buf[4],
+            buf[self.controller.value.rstick_start], buf[self.controller.value.rstick_start+1],
 
             # L2 and R2 analog
-            buf[8], buf[9],
+            buf[self.controller.value.l2_analog], buf[self.controller.value.r2_analog],
 
             # DPad up, down, left, right
             (dpad in (0, 1, 7)), (dpad in (3, 4, 5)),
             (dpad in (5, 6, 7)), (dpad in (1, 2, 3)),
 
             # Buttons cross, circle, square, triangle
-            (buf[5] & 32) != 0, (buf[5] & 64) != 0,
-            (buf[5] & 16) != 0, (buf[5] & 128) != 0,
+            (buf[self.controller.value.symbols] &
+             32) != 0, (buf[self.controller.value.symbols] & 64) != 0,
+            (buf[self.controller.value.symbols] &
+             16) != 0, (buf[self.controller.value.symbols] & 128) != 0,
 
             # L1, L2 and L3 buttons
-            (buf[6] & 1) != 0, (buf[6] & 4) != 0, (buf[6] & 64) != 0,
+            (buf[self.controller.value.rl_digital] & 1) != 0, (buf[self.controller.value.rl_digital]
+                                                               & 4) != 0, (buf[self.controller.value.rl_digital] & 64) != 0,
 
             # R1, R2,and R3 buttons
-            (buf[6] & 2) != 0, (buf[6] & 8) != 0, (buf[6] & 128) != 0,
+            (buf[self.controller.value.rl_digital] & 2) != 0, (buf[self.controller.value.rl_digital]
+                                                               & 8) != 0, (buf[self.controller.value.rl_digital] & 128) != 0,
 
-            # Share and option buttons
-            (buf[6] & 16) != 0, (buf[6] & 32) != 0,
+            # Share/Create and option buttons
+            (buf[self.controller.value.rl_digital] &
+             16) != 0, (buf[self.controller.value.rl_digital] & 32) != 0,
 
             # Trackpad and PS buttons
-            (buf[7] & 2) != 0, (buf[7] & 1) != 0,
+            (buf[self.controller.value.trackpadps] &
+             2) != 0, (buf[self.controller.value.trackpadps] & 1) != 0,
 
             # Acceleration
-            S16LE.unpack_from(buf, 13)[0],
-            S16LE.unpack_from(buf, 15)[0],
-            S16LE.unpack_from(buf, 17)[0],
+            S16LE.unpack_from(buf, self.controller.value.accel_start)[0],
+            S16LE.unpack_from(buf, self.controller.value.accel_start+2)[0],
+            S16LE.unpack_from(buf, self.controller.value.accel_start+4)[0],
 
             # Orientation
-            -(S16LE.unpack_from(buf, 19)[0]),
-            S16LE.unpack_from(buf, 21)[0],
-            S16LE.unpack_from(buf, 23)[0],
+            -(S16LE.unpack_from(buf, self.controller.value.gyro_start)[0]),
+            S16LE.unpack_from(buf, self.controller.value.gyro_start+2)[0],
+            S16LE.unpack_from(buf, self.controller.value.gyro_start+4)[0],
 
             # Trackpad touch 1: id, active, x, y
-            buf[35] & 0x7f, (buf[35] >> 7) == 0,
-            ((buf[37] & 0x0f) << 8) | buf[36],
-            buf[38] << 4 | ((buf[37] & 0xf0) >> 4),
+            buf[self.controller.value.touchpad_start] & 0x7f, (
+                buf[self.controller.value.touchpad_start] >> 7) == 0,
+            ((buf[self.controller.value.touchpad_start+2] & 0x0f)
+             << 8) | buf[self.controller.value.touchpad_start+1],
+            buf[self.controller.value.touchpad_start + \
+                3] << 4 | ((buf[self.controller.value.touchpad_start+2] & 0xf0) >> 4),
 
             # Trackpad touch 2: id, active, x, y
-            buf[39] & 0x7f, (buf[39] >> 7) == 0,
-            ((buf[41] & 0x0f) << 8) | buf[40],
-            buf[42] << 4 | ((buf[41] & 0xf0) >> 4),
+            buf[self.controller.value.touchpad_start + \
+                3] & 0x7f, (buf[self.controller.value.touchpad_start+3] >> 7) == 0,
+            ((buf[self.controller.value.touchpad_start+5] & 0x0f)
+             << 8) | buf[self.controller.value.touchpad_start+4],
+            buf[self.controller.value.touchpad_start + \
+                6] << 4 | ((buf[self.controller.value.touchpad_start+5] & 0xf0) >> 4),
 
             # Timestamp and battery
-            buf[7] >> 2,
-            buf[30] % 16,
+            buf[self.controller.value.trackpadps] >> 2,
+            buf[self.controller.value.batt_and_in] % 16,
 
             # External inputs (usb, audio, mic)
-            (buf[30] & 16) != 0, (buf[30] & 32) != 0,
-            (buf[30] & 64) != 0
+            (buf[self.controller.value.batt_and_in] &
+             16) != 0, (buf[self.controller.value.batt_and_in] & 32) != 0,
+            (buf[self.controller.value.batt_and_in] & 64) != 0
         )
 
     def read_report(self):
@@ -219,7 +248,7 @@ class DS4Device(object):
         pass
 
     def set_operational(self):
-        """Tells the DS4 controller we want full HID reports."""
+        """Tells the DS controller we want full HID reports."""
         pass
 
     def close(self):
@@ -233,4 +262,4 @@ class DS4Device(object):
         elif self.type == "usb":
             type_name = "USB"
 
-        return "{0} Controller ({1})".format(type_name, self.device_name)
+        return "{} {} Controller ({})".format(type_name, self.controller.name, self.device_name)

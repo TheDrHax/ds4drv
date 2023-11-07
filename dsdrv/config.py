@@ -52,11 +52,9 @@ configopt.add_argument("--config", metavar="filename",
                             "/etc/ds4drv.conf, whichever is found first")
 
 backendopt = parser.add_argument_group("backend options")
-backendopt.add_argument("--hidraw", action="store_true",
-                        help="Use hidraw devices. This can be used to access "
-                             "USB and paired bluetooth devices. Note: "
-                             "Bluetooth devices does currently not support "
-                             "any LED functionality")
+backendopt.add_argument("--no-hidraw", action="store_true",
+                        help="Don't use hidraw - use bluetooth directly instead"
+                             "Note: DualSense not supported in direct Bluetooth mode")
 
 daemonopt = parser.add_argument_group("daemon options")
 daemonopt.add_argument("--daemon", action="store_true",

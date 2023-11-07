@@ -4,6 +4,9 @@
 *.EGG
 *.EGG-INFO
 bin
+.vscode
+lib
+lib64
 build
 develop-eggs
 downloads
@@ -24,3 +27,5 @@ dist
 *.so
 __pycache__
 docs/_build
+pyvenv.cfg
+.env

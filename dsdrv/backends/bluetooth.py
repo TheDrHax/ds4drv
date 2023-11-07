@@ -3,8 +3,9 @@ import subprocess
 
 from ..backend import Backend
 from ..exceptions import BackendError, DeviceError
-from ..device import DS4Device
+from ..device import DSDevice
 from ..utils import zero_copy_slice
+from ..controllers import controllers
 
 
 L2CAP_PSM_HIDP_CTRL = 0x11
@@ -17,7 +18,7 @@ REPORT_ID = 0x11
 REPORT_SIZE = 79
 
 
-class BluetoothDS4Device(DS4Device):
+class BluetoothDSDevice(DSDevice):
     @classmethod
     def connect(cls, addr):
         ctl_socket = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET,
@@ -41,8 +42,8 @@ class BluetoothDS4Device(DS4Device):
         self.int_sock = int_sock
         self.report_fd = int_sock.fileno()
 
-        super(BluetoothDS4Device, self).__init__(addr.upper(), addr,
-                                                 "bluetooth")
+        super(BluetoothDSDevice, self).__init__(addr.upper(), addr,
+                                                 "bluetooth", controllers.DualShock4)
 
     def read_report(self):
         try:
@@ -118,7 +119,7 @@ class BluetoothBackend(Backend):
         for bdaddr, name in self.scan():
             if name == "Wireless Controller":
                 self.logger.info("Found device {0}", bdaddr)
-                return BluetoothDS4Device.connect(bdaddr)
+                return BluetoothDSDevice.connect(bdaddr)
 
     @property
     def devices(self):
